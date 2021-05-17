@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type ServerData struct {
@@ -16,6 +17,7 @@ type ServerData struct {
 }
 
 var Data []ServerData
+var mtx sync.Mutex
 
 type MyServ struct {
 }
@@ -55,11 +57,13 @@ func (ms *MyServ) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				rw.WriteHeader(http.StatusCreated)
 			} else {
+				mtx.Lock()
 				Data = append(Data, local_data)
-				rw.WriteHeader(201)
-				rw.Header().Set("Content-Type", "application/json")
 				var ret_json bytes.Buffer
 				fmt.Fprintf(&ret_json, `{"id":%d}`, len(Data))
+				mtx.Unlock()
+				rw.WriteHeader(201)
+				rw.Header().Set("Content-Type", "application/json")
 				json.NewEncoder(rw).Encode(ret_json.String())
 			}
 		}
@@ -89,6 +93,7 @@ func (ms *MyServList) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 			rw.WriteHeader(http.StatusBadRequest)
 			return
 		} else {
+			mtx.Lock()
 			if rec > len(Data) {
 				rw.WriteHeader(http.StatusNotFound)
 				return
@@ -98,6 +103,7 @@ func (ms *MyServList) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 				Data[rec-1].Url = local_data.Url
 				Data[rec-1].Interval = local_data.Interval
 			}
+			mtx.Unlock()
 		}
 	case http.MethodDelete:
 		if rec, err := strconv.Atoi(params[3]); err != nil {
@@ -108,7 +114,9 @@ func (ms *MyServList) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 				rw.WriteHeader(http.StatusNotFound)
 				return
 			} else {
+				mtx.Lock()
 				Data = append(Data[:rec-1], Data[rec:]...)
+				mtx.Unlock()
 			}
 		}
 	}
